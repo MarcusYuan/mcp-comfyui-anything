@@ -1,0 +1,80 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "comfyfusion-engine"
+version = "1.0.0"
+description = "ComfyFusion Engine - 智能化 ComfyUI 工作流执行引擎"
+authors = [
+    {name = "ComfyFusion Team", email = "team@comfyfusion.com"},
+]
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.9"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    # FastMCP 核心依赖
+    "fastmcp>=2.0.0",
+    
+    # HTTP 客户端
+    "httpx>=0.24.0",
+    
+    # 异步文件处理
+    "aiofiles>=23.0.0",
+    "websockets>=12.0",
+    
+    # 数据处理
+    "pydantic>=2.0.0",
+    "deepmerge>=1.1.0",
+    
+    # 文件系统监控
+    "watchdog>=3.0.0",
+    
+    # 工具
+    "click>=8.0.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "mypy>=1.5.0",
+]
+
+[project.scripts]
+comfyfusion-mcp = "comfyfusion.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/comfyfusion"]
+
+[tool.black]
+line-length = 88
+target-version = ['py39']
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[project.urls]
+Homepage = "https://github.com/comfyfusion/engine"
+Repository = "https://github.com/comfyfusion/engine" 

@@ -1,0 +1,22 @@
+{
+  "comfyui": {
+    "host": "192.168.3.3",
+    "port": 8188,
+    "timeout": 300
+  },
+  "mcp": {
+    "server_name": "comfyfusion-engine",
+    "description": "ComfyUI 智能工作流执行引擎",
+    "version": "1.0.0",
+    "protocol": "streaming",
+    "enable_streams": true,
+    "host": "127.0.0.1",
+    "port": 8000
+  },
+  "paths": {
+    "workflows": "./workflows"
+  },
+  "logging": {
+    "level": "DEBUG"
+  }
+} 

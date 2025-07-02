@@ -1,0 +1,187 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# ComfyFusion Engine - 项目架构规则
+
+## 项目概述
+
+ComfyFusion Engine 是基于 FastMCP 2.0+ 的 ComfyUI 智能代理服务，采用创新的三工具协作架构和流式协议设计。详细架构请参考：[ComfyFusion-Engine-架构设计.md](mdc:ComfyFusion-Engine-架构设计.md)
+
+## 核心架构原则
+
+### 1. 三工具协作架构
+项目采用智能化三工具架构，每个工具职责明确：
+
+- **工具1 (`list_workflows`)**：工作流枚举器，提供可用工作流清单
+- **工具2 (`analyze_and_execute`)**：智能分析器，分析用户需求并生成工作流补丁，通过引导信息让Client LLM调用工具3
+- **工具3 (`execute_workflow`)**：纯执行引擎，执行三层融合和ComfyUI调用
+
+### 2. LLM引导的工具链协作
+**关键设计原则**：工具2不直接调用工具3，而是通过返回引导信息让Client LLM自动调用工具3，实现真正的MCP协议合规的工具链协作。
+
+### 3. 流式协议支持
+所有工具函数必须支持 `AsyncGenerator` 流式返回，提供实时执行反馈和进度跟踪。
+
+## 技术栈规范
+
+### 核心依赖
+- **FastMCP**: >= 2.0.0 (MCP服务器框架)
+- **Pydantic**: >= 2.0.0 (数据验证)
+- **HTTPX**: >= 0.24.0 (异步HTTP客户端)
+- **aiofiles**: >= 23.0.0 (异步文件操作)
+
+### 编程模式
+- 所有核心功能必须使用 `async def` 实现
+- 工具函数必须接收 `Context` 参数访问服务器能力
+- 支持流式响应的函数使用 `AsyncGenerator[dict, None]` 返回类型
+
+## 文件结构规范
+
+### 核心源码结构
+参考项目结构：[pyproject.toml](mdc:pyproject.toml)
+
+```
+src/comfyfusion/
+├── server.py              # FastMCP 服务器主文件
+├── fusion/
+│   ├── engine.py          # 三层融合引擎核心逻辑
+│   └── mapping.py         # 参数映射配置
+├── api/
+│   └── comfyui_client.py  # ComfyUI API 客户端 (支持流式)
+├── task_manager.py        # 任务队列管理系统
+├── workflow_manager.py    # 工作流管理器
+└── utils/
+    ├── config.py          # 配置管理
+    ├── logger.py          # 日志系统
+    ├── types.py           # 类型定义
+    └── workflow_discovery.py  # 工作流自动发现
+```
+
+### 工作流文件规范
+```
+workflows/
+├── {workflow_name}.json        # 基础工作流（ComfyUI API格式）
+├── {workflow_name}_tp.json     # 对应模板文件（补丁格式）
+```
+
+## 开发规范
+
+### 1. 工具函数设计规范
+```python
+@mcp.tool()
+async def tool_name(
+    parameter: str,
+    ctx: Context
+) -> AsyncGenerator[Dict[str, Any], None]:
+    """
+    工具描述
+    
+    Args:
+        parameter: 参数描述
+        ctx: FastMCP上下文对象
+        
+    Yields:
+        Dict[str, Any]: 流式响应数据
+    """
+    # 实现逻辑
+    yield {"status": "processing", "progress": 50}
+    yield {"status": "complete", "result": result}
+```
+
+### 2. 三层融合设计模式
+实现工作流的三层数据融合：
+```
+用户输入层 (Dynamic Patch)   [最高优先级]
+    ⬇️ 覆盖合并
+静态配置层 (Template)        [中间优先级] 
+    ⬇️ 覆盖合并
+基础工作流层 (Workflow)       [基础蓝图]
+```
+
+### 3. 错误处理规范
+- 使用 Context 进行日志记录和错误处理
+- 支持流式错误反馈
+- 实现优雅降级和自动重试机制
+
+### 4. 配置管理
+配置文件位置：[config/](mdc:config)
+- 使用 JSON 格式存储配置
+- 支持环境变量覆盖
+- 配置热更新支持
+
+## 工作流管理规范
+
+### 1. 工作流文件命名
+- 基础工作流：`{功能}_{版本}.json`
+- 模板文件：`{功能}_{版本}_tp.json`
+- 使用语义化的命名约定
+
+### 2. 模板设计原则
+- 模板应专注于单一场景或风格
+- 提供清晰的描述信息
+- 合理使用参数占位符（如 `{prompt}`）
+
+### 3. 参数映射规则
+- 使用用户友好的参数名称
+- 提供合理的默认值
+- 考虑参数间的依赖关系
+
+## 中间件架构理念
+
+ComfyFusion Engine 作为纯中间件设计：
+- **ComfyUI 负责**：AI 计算和文件存储管理
+- **MCP 服务器负责**：工作流融合、任务调度、参数简化
+- **用户获得**：简化的接口 + ComfyUI 原生文件访问能力
+
+## 监控与日志规范
+
+### 1. 流式监控
+- 实时状态监控通过流式协议实现
+- 性能指标：延迟、吞吐量、成功率
+- 资源使用：CPU、内存、磁盘使用情况
+
+### 2. 审计日志
+- 所有工具调用和工作流执行记录
+- 用户行为和操作历史记录
+- 性能分析和资源消耗分析
+
+## Context7集成要求
+
+根据项目规则 [context7-first.mdc](mdc:.cursor/rules/context7-first.mdc)，在编写、修改或调试任何代码前，必须：
+
+1. **识别技术栈**：FastMCP、Pydantic、HTTPX等
+2. **查询最新文档**：使用mcp_context7工具获取相关库的最新文档
+3. **基于最新文档编写代码**：确保使用最新API和最佳实践
+
+## 扩展性设计
+
+### 1. 新工作流添加
+- 只需添加 JSON 文件到 workflows 目录
+- 系统自动发现和注册新工作流
+
+### 2. 新模板添加  
+- 只需添加 `_tp.json` 补丁文件
+- 支持动态加载无需重启
+
+### 3. 新参数支持
+- 通过配置文件扩展参数映射规则
+- 支持复杂参数依赖关系
+
+## 最佳实践
+
+1. **异步优先**：所有IO操作使用异步实现
+2. **流式体验**：提供实时反馈和进度更新
+3. **职责分离**：工具间职责清晰，避免直接内部调用
+4. **错误处理**：完善的错误捕获和恢复机制
+5. **资源管理**：合理的并发控制和资源限制
+6. **文档同步**：代码变更时同步更新架构文档
+
+## 关键创新点
+
+1. **工具引导LLM模式**：开创性的"工具主动利用LLM"设计
+2. **智能自动化执行链**：一次调用完成分析→构造→执行全流程
+3. **流式协议应用**：MCP流式协议在AI内容生成领域的创新应用
+4. **三层融合架构**：灵活的工作流定制和参数管理机制
+
