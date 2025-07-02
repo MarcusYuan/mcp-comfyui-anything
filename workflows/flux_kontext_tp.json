@@ -1,0 +1,15 @@
+{
+  "description": "Flux Kontext工作流模板 - 支持自定义提示词和图像URL",
+  "nodes": {
+    "6": {
+      "inputs": {
+        "text": "{prompt}"
+      }
+    },
+    "190": {
+      "inputs": {
+        "url": "{image_url}"
+      }
+    }
+  }
+}
