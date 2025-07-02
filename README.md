@@ -2,7 +2,7 @@
 
 ## 🌟 项目概览
 
-ComfyFusion Engine 是一个智能 ComfyUI 工作流执行引擎，旨在简化 ComfyUI 的复杂性，并提供标准化的 MCP 接口。它支持通过 MCP 协议与各种编辑器集成，包括：
+ComfyFusion Engine 是一个智能 ComfyUI 工作流执行引擎，旨在解决 ComfyUI 自定义工作流的多样性管理和复杂性问题。它提供标准化的 MCP 接口，能够完美适配并支持各种不同的 ComfyUI 工作流，并通过 MCP 协议与多种编辑器无缝集成，包括：
 - ✅ Cursor 编辑器
 - ✅ VS Code（通过 MCP 扩展）
 - ✅ 任何支持 MCP 协议的 IDE
