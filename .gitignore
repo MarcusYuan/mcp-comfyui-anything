@@ -19,3 +19,10 @@ __pycache__/
 *.tmp
 *.swp
 *~
+
+# Markdown 文件排除 (除了 README.md)
+*.md
+!README.md
+
+# 构建输出目录排除
+dist/
