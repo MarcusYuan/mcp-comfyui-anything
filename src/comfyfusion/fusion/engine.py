@@ -56,7 +56,7 @@ class WorkflowFusionEngine:
             final_workflow = self._apply_user_patch(final_workflow, user_patch)
         
         logger.info(f"工作流融合完成，最终节点数: {len(final_workflow)}")
-        logger.debug(f"融合后的最终工作流: {json.dumps(final_workflow, indent=2)}")
+        logger.debug(f"融合后的最终工作流: {json.dumps(final_workflow, indent=2, ensure_ascii=False)}")
         # 打印最终工作流中 seed 参数的值
         seed_value = final_workflow.get("31", {}).get("inputs", {}).get("seed", "未找到")
         logger.info(f"融合后工作流中节点31的seed值: {seed_value}")

@@ -99,11 +99,15 @@ class ComfyUIClient:
             "client_id": "comfyfusion"
         }
         
-        logger.debug(f"发送给ComfyUI的工作流 (prompt_data): {json.dumps(prompt_data, indent=2)}")
+        logger.debug(f"发送给ComfyUI的工作流 (prompt_data): {json.dumps(prompt_data, indent=2, ensure_ascii=False)}")
         
+        # 手动序列化JSON，确保中文字符不被转义
+        json_data = json.dumps(prompt_data, ensure_ascii=False)
+        headers = {'Content-Type': 'application/json'}
         response = await self.client.post(
             f"{self.base_url}/prompt",
-            json=prompt_data
+            content=json_data,
+            headers=headers
         )
         
         if response.status_code != 200:
