@@ -10,6 +10,7 @@ ComfyFusion Engine - 智能化 ComfyUI 工作流执行引擎
 import asyncio
 import json
 import logging
+import time  # 新增导入
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -135,10 +136,7 @@ async def analyze_and_execute(
         await ctx.report_progress(progress=30, total=100)
         
         # 验证工作流名称
-        await ctx.debug(f"调用 get_workflow_names() 前的类型: {type(workflow_discovery.get_workflow_names)}")
-        workflow_names_list = workflow_discovery.get_workflow_names()
-        await ctx.debug(f"调用 get_workflow_names() 后的类型: {type(workflow_names_list)}")
-        if workflow_name not in workflow_names_list:
+        if workflow_name not in workflow_discovery.get_workflow_names():
             raise McpError(f"无效工作流名称: {workflow_name}")
         
         # 构造LLM提示词
@@ -211,7 +209,7 @@ async def execute_workflow(
     """
     工具3：纯执行引擎，执行融合后的工作流
     
-    接收完整的workflow补丁，执行三层融合并调用ComfyUI API。
+    接收完整的workflow补丁，执行两级融合并调用ComfyUI API。
     
     Args:
         workflow_name: 工作流名称
@@ -222,6 +220,7 @@ async def execute_workflow(
         执行结果，包含生成文件的ComfyUI原生URL
     """
     try:
+        await ctx.debug("进入execute_workflow函数")
         await ctx.info(f"开始执行工作流: {workflow_name}")
         # 添加更显眼的日志，打印传入的 workflow_patch
         logger.error(f"DEBUG_WORKFLOW_PATCH: {json.dumps(workflow_patch, indent=2, ensure_ascii=False)}")
@@ -235,22 +234,30 @@ async def execute_workflow(
         if not base_workflow:
             raise McpError(f"未找到基础工作流: {workflow_name}")
         
+        await ctx.debug("基础工作流加载完成")
+        logger.debug(f"基础工作流节点数: {len(base_workflow)}")  # 新增节点数日志
         await ctx.report_progress(progress=20, total=100)
         
         # 2. 加载模板补丁
         await ctx.info("加载模板补丁...")
         template_patch = await workflow_discovery.load_template(workflow_name)
         
+        await ctx.debug("模板补丁加载完成")
+        logger.debug(f"模板补丁节点数: {len(template_patch)}")  # 新增节点数日志
         await ctx.report_progress(progress=30, total=100)
         
-        # 3. 执行三层融合
-        await ctx.info("执行三层融合...")
+        # 3. 执行两级融合
+        await ctx.info("执行两级工作流融合...")
+        start_fusion = time.time()  # 新增融合开始时间
         final_workflow = await fusion_engine.fusion_workflow(
             base_workflow=base_workflow,
             template_patch=template_patch,
             user_patch=workflow_patch
         )
+        fusion_time = time.time() - start_fusion  # 新增融合耗时
+        logger.debug(f"工作流融合耗时: {fusion_time:.2f}秒")  # 新增耗时日志
         
+        await ctx.debug("工作流融合完成")
         await ctx.info("工作流融合完成")
         await ctx.debug(f"最终工作流节点数: {len(final_workflow)}")
         
@@ -258,22 +265,21 @@ async def execute_workflow(
         if not fusion_engine.validate_workflow(final_workflow):
             error_msg = "融合后的工作流格式无效"
             logger.error(error_msg)
+            await ctx.debug("工作流验证失败")
             return {"status": "error", "error": error_msg}
         
-        # 详细调试输出融合后的工作流结构
-        logger.debug("=== 融合后工作流详细结构调试 ===")
-        logger.debug(f"工作流根键: {list(final_workflow.keys())}")
+        await ctx.debug("工作流验证完成")
         
+        # 详细调试输出融合后的工作流结构
         # 检查每个顶级键
         for key, value in final_workflow.items():
-            logger.debug(f"键 '{key}': 类型 {type(value)}")
             if isinstance(value, dict):
                 if 'class_type' in value:
-                    logger.debug(f"  → 节点 {key}: class_type = {value['class_type']}")
+                    pass
                 else:
-                    logger.debug(f"  → 非节点对象 {key}: 内容 = {value}")
+                    pass
             else:
-                logger.debug(f"  → 非字典对象 {key}: 值 = {value}")
+                pass
         
         # 查找所有无效节点（缺少class_type的节点）
         invalid_nodes = []
@@ -289,14 +295,17 @@ async def execute_workflow(
                 logger.info(f"移除无效节点: {invalid_node}")
                 del final_workflow[invalid_node]
         
-        logger.debug("=== 工作流结构调试完成 ===")
-        
         await ctx.report_progress(progress=50, total=100)
+        logger.debug(f"移除无效节点后剩余节点数: {len(final_workflow)}")  # 新增节点数日志
         
         # 4. 调用ComfyUI API执行
         await ctx.info("提交到ComfyUI执行...")
+        start_execution = time.time()  # 新增执行开始时间
         execution_result = await comfyui_client.execute_workflow(final_workflow)
+        execution_time = time.time() - start_execution  # 新增执行耗时
+        logger.debug(f"ComfyUI执行耗时: {execution_time:.2f}秒")  # 新增耗时日志
         
+        await ctx.debug("ComfyUI执行完成")
         await ctx.report_progress(progress=90, total=100)
         
         # 5. 构造返回结果
@@ -312,14 +321,20 @@ async def execute_workflow(
         }
         
         await ctx.report_progress(progress=100, total=100)
+        await ctx.debug("工作流执行结果处理完成")
         await ctx.info(f"工作流执行完成，生成 {len(result['output_files'])} 个文件")
+        logger.debug(f"输出文件详情: {json.dumps(result['output_files'], indent=2)}")  # 新增文件详情日志
         
         return result
         
     except Exception as e:
-        await ctx.error(f"执行工作流时发生错误: {e}")
+        error_type = type(e).__name__  # 获取异常类型
+        await ctx.debug(f"execute_workflow异常 [{error_type}]: {str(e)}")
+        await ctx.error(f"执行工作流时发生错误 [{error_type}]: {e}")
+        logger.exception("工作流执行失败详情")  # 新增详细异常日志
         return {
             "status": "error",
+            "error_type": error_type,  # 新增异常类型
             "error": str(e),
             "workflow_name": workflow_name,
             "workflow_patch": workflow_patch
@@ -366,8 +381,6 @@ def _construct_llm_prompt(
 }}
 """
     return prompt
-
-
 
 
 
@@ -433,4 +446,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main() 
+    main()

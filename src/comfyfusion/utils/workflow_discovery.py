@@ -81,7 +81,7 @@ class WorkflowDiscovery:
     
     async def _scan_workflows(self):
         """扫描工作流目录"""
-        logger.debug("扫描工作流目录...")
+        
         
         workflows = {}
         templates = {}
@@ -96,7 +96,7 @@ class WorkflowDiscovery:
                         async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
                             content = await f.read()
                             templates[workflow_name] = json.loads(content)
-                            logger.debug(f"加载模板: {workflow_name}")
+                            
                     except Exception as e:
                         logger.error(f"加载模板文件失败 {file_path}: {e}")
                 else:
@@ -106,7 +106,7 @@ class WorkflowDiscovery:
                         async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
                             content = await f.read()
                             workflows[workflow_name] = json.loads(content)
-                            logger.debug(f"加载工作流: {workflow_name}")
+                            
                     except Exception as e:
                         logger.error(f"加载工作流文件失败 {file_path}: {e}")
             
@@ -115,7 +115,7 @@ class WorkflowDiscovery:
             for name, workflow in workflows.items():
                 if name in templates:
                     valid_workflows[name] = workflow
-                    logger.debug(f"发现有效工作流: {name}")
+                    
                 else:
                     logger.warning(f"工作流 {name} 没有对应的模板文件")
             
@@ -187,7 +187,7 @@ class WorkflowDiscovery:
                     extract_from_dict(item, f"{path}[{i}]")
         
         extract_from_dict(template)
-        logger.debug(f"从模板 '{template.get('description', '未知模板')}' 提取到的参数: {parameters}")
+        
         return parameters
     
     def stop_discovery(self):

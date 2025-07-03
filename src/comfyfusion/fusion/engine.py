@@ -13,6 +13,7 @@ from typing import Dict, Any, Optional, List
 from deepmerge import always_merger
 
 from ..utils.logger import get_logger
+from .patcher import Patcher # 导入Patcher
 
 logger = get_logger(__name__)
 
@@ -22,7 +23,8 @@ class WorkflowFusionEngine:
     
     def __init__(self):
         logger.info("工作流融合引擎初始化")
-    
+        self.patcher = Patcher(strategy='merge') # 初始化Patcher
+
     async def fusion_workflow(
         self,
         base_workflow: Dict[str, Any],
@@ -30,7 +32,9 @@ class WorkflowFusionEngine:
         user_patch: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
-        执行三层融合
+        执行两级融合：
+        1. 融合用户补丁和模板补丁，生成统一补丁（无占位符）。
+        2. 将统一补丁应用到基础工作流。
         
         Args:
             base_workflow: 基础工作流（完整配置）
@@ -40,107 +44,58 @@ class WorkflowFusionEngine:
         Returns:
             融合后的最终工作流
         """
-        logger.info("开始执行三层工作流融合")
+        logger.info("开始执行两级工作流融合")
         
-        # 深拷贝基础工作流，避免修改原始数据
-        final_workflow = copy.deepcopy(base_workflow)
+        # 第一步：融合用户补丁和模板补丁
+        unified_patch = self.patcher.fuse(user_patch, template_patch)
+        logger.info(f"统一补丁生成完成，节点数: {len(unified_patch.get('nodes', {}))}")
         
-        # 第一层：应用模板补丁
-        if template_patch:
-            logger.debug("应用模板补丁...")
-            final_workflow = self._apply_template_patch(final_workflow, template_patch)
         
-        # 第二层：应用用户补丁
-        if user_patch:
-            logger.debug("应用用户补丁...")
-            final_workflow = self._apply_user_patch(final_workflow, user_patch)
+        # 第二步：应用统一补丁到基础工作流
+        final_workflow = self._apply_unified_patch(base_workflow, unified_patch)
         
         logger.info(f"工作流融合完成，最终节点数: {len(final_workflow)}")
-        logger.debug(f"融合后的最终工作流: {json.dumps(final_workflow, indent=2, ensure_ascii=False)}")
+        
         # 打印最终工作流中 seed 参数的值
         seed_value = final_workflow.get("31", {}).get("inputs", {}).get("seed", "未找到")
         logger.info(f"融合后工作流中节点31的seed值: {seed_value}")
         return final_workflow
     
-    def _apply_template_patch(
+    def _apply_unified_patch(
         self,
         workflow: Dict[str, Any],
-        template_patch: Dict[str, Any]
+        unified_patch: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        应用模板补丁
-        
-        结构化合并节点配置，支持占位符参数
+        将统一补丁（无占位符）应用到工作流。
+        仅更新工作流中已存在的节点的输入字段（不添加新节点或新字段）。
         """
+        final_workflow = copy.deepcopy(workflow)
+        
         # 提取节点补丁配置
-        node_patches = template_patch.get("nodes", {})
+        node_patches = unified_patch.get("nodes", {})
         
-        # 深度合并每个节点配置
-        for node_id, node_config in node_patches.items():
-            if node_id in workflow:
-                workflow[node_id] = always_merger.merge(
-                    workflow[node_id],
-                    node_config
-                )
-            else:
-                logger.warning(f"模板补丁引用不存在的节点: {node_id}")
-        
-        logger.debug(f"应用模板补丁完成，修改了 {len(node_patches)} 个节点")
-        return workflow
-    
-    def _apply_user_patch(
-        self,
-        workflow: Dict[str, Any],
-        user_patch: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """
-        应用用户补丁
-        
-        递归注入参数值到占位符位置
-        """
-        
-        def get_nested_value(d: Dict, keys: List[str]):
-            """根据点分隔的键路径从字典中获取嵌套值"""
-            current = d
-            for key in keys:
-                if isinstance(current, dict) and key in current:
-                    current = current[key]
+        for node_id, node_patch in node_patches.items():
+            if node_id not in final_workflow:
+                logger.warning(f"统一补丁引用不存在的节点: {node_id}，已跳过。")
+                continue
+                
+            # 仅处理节点中的输入字段
+            patch_inputs = node_patch.get("inputs", {})
+            base_node = final_workflow[node_id]
+            
+            if "inputs" not in base_node:
+                logger.warning(f"节点 {node_id} 缺少 inputs 字段，无法应用补丁")
+                continue
+                
+            # 仅更新基础节点中已存在的输入字段
+            for key, value in patch_inputs.items():
+                if key in base_node["inputs"]:
+                    base_node["inputs"][key] = value
                 else:
-                    return None # 如果路径不存在，返回 None
-            return current
-
-        def inject_params(obj):
-            if isinstance(obj, dict):
-                return {k: inject_params(v) for k, v in obj.items()}
-            elif isinstance(obj, list):
-                return [inject_params(item) for item in obj]
-            elif isinstance(obj, str) and obj.startswith("{") and obj.endswith("}"):
-                param_name = obj[1:-1] # 例如 "image_url"
-                
-                # 尝试从 user_patch 中直接获取
-                resolved_value = user_patch.get(param_name)
-                
-                if resolved_value is None:
-                    # 尝试解析为嵌套路径，例如 "nodes.190.inputs.url"
-                    if "." in param_name:
-                        path_parts = param_name.split(".")
-                        resolved_value = get_nested_value(user_patch, path_parts)
-                
-                # 特殊处理：节点ID作为路径起点 (如 "190.inputs.url")
-                if resolved_value is None and param_name[0].isdigit():
-                    if "." in param_name:
-                        path_parts = param_name.split(".")
-                        if path_parts[0].isdigit():
-                            resolved_value = get_nested_value(user_patch, path_parts)
-                
-                # 如果仍然没有解析到值，则保留原始占位符
-                if resolved_value is None:
-                    resolved_value = obj
-                return resolved_value
-            return obj
+                    logger.warning(f"节点 {node_id} 的输入字段 {key} 不存在于基础工作流，已跳过。")
         
-        logger.debug("应用用户补丁...")
-        return inject_params(workflow)
+        return final_workflow
     
     def validate_workflow(self, workflow: Dict[str, Any]) -> bool:
         """
@@ -174,12 +129,32 @@ class WorkflowFusionEngine:
                 if "inputs" not in node_config:
                     logger.warning(f"节点 {node_id} 缺少 inputs 字段")
                     return False
+                
+                # 新增：检查占位符是否被替换
+                if self._contains_placeholders(node_config):
+                    logger.warning(f"节点 {node_id} 包含未替换的占位符")
+                    return False
             
             return True
             
         except Exception as e:
             logger.error(f"工作流验证失败: {e}")
             return False
+
+    def _contains_placeholders(self, config: Dict[str, Any]) -> bool:
+        """
+        检查配置中是否包含占位符 {var}
+        """
+        for key, value in config.items():
+            if isinstance(value, str) and "{" in value and "}" in value:
+                return True
+            elif isinstance(value, dict) and self._contains_placeholders(value):
+                return True
+            elif isinstance(value, list):
+                for item in value:
+                    if isinstance(item, dict) and self._contains_placeholders(item):
+                        return True
+        return False
     
     def get_workflow_info(self, workflow: Dict[str, Any]) -> Dict[str, Any]:
         """
