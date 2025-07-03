@@ -9,7 +9,7 @@
 
 import json
 import copy
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from deepmerge import always_merger
 
 from ..utils.logger import get_logger
@@ -98,15 +98,44 @@ class WorkflowFusionEngine:
         
         递归注入参数值到占位符位置
         """
+        
+        def get_nested_value(d: Dict, keys: List[str]):
+            """根据点分隔的键路径从字典中获取嵌套值"""
+            current = d
+            for key in keys:
+                if isinstance(current, dict) and key in current:
+                    current = current[key]
+                else:
+                    return None # 如果路径不存在，返回 None
+            return current
+
         def inject_params(obj):
             if isinstance(obj, dict):
                 return {k: inject_params(v) for k, v in obj.items()}
             elif isinstance(obj, list):
                 return [inject_params(item) for item in obj]
             elif isinstance(obj, str) and obj.startswith("{") and obj.endswith("}"):
-                param_name = obj[1:-1]
-                resolved_value = user_patch.get(param_name, obj)
-                logger.debug(f"处理占位符: {obj}, 参数名: {param_name}, 解析值: {resolved_value}")
+                param_name = obj[1:-1] # 例如 "image_url"
+                
+                # 尝试从 user_patch 中直接获取
+                resolved_value = user_patch.get(param_name)
+                
+                if resolved_value is None:
+                    # 尝试解析为嵌套路径，例如 "nodes.190.inputs.url"
+                    if "." in param_name:
+                        path_parts = param_name.split(".")
+                        resolved_value = get_nested_value(user_patch, path_parts)
+                
+                # 特殊处理：节点ID作为路径起点 (如 "190.inputs.url")
+                if resolved_value is None and param_name[0].isdigit():
+                    if "." in param_name:
+                        path_parts = param_name.split(".")
+                        if path_parts[0].isdigit():
+                            resolved_value = get_nested_value(user_patch, path_parts)
+                
+                # 如果仍然没有解析到值，则保留原始占位符
+                if resolved_value is None:
+                    resolved_value = obj
                 return resolved_value
             return obj
         
@@ -176,4 +205,4 @@ class WorkflowFusionEngine:
             "node_count": len(workflow),
             "node_types": node_types,
             "unique_node_types": len(node_types)
-        } 
+        }

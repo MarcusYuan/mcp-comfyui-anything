@@ -148,7 +148,7 @@ class ComfyUIClient:
                 logger.debug(f"ComfyUI历史响应 (prompt_id: {prompt_id}): {json.dumps(history_data, indent=2)}")
 
                 if not history_data:
-                    logger.debug(f"ComfyUI历史响应为空，继续等待... (prompt_id: {prompt_id})")
+                    logger.info(f"ComfyUI历史响应为空，继续等待... (prompt_id: {prompt_id})") # 提升日志级别
                     await asyncio.sleep(2) # 额外等待，避免频繁请求
                     continue
                 
@@ -157,15 +157,16 @@ class ComfyUIClient:
                     
                     # 检查是否完成
                     if result.get("status", {}).get("completed", False):
-                        logger.info(f"执行完成: {prompt_id}")
+                        logger.info(f"ComfyUI工作流在ComfyUI端已完成: {prompt_id}") # 明确工作流在ComfyUI端完成
                         return result
                     
                     # 检查是否出错
                     if "error" in result.get("status", {}):
                         error_msg = result["status"]["error"]
+                        logger.error(f"ComfyUI工作流在ComfyUI端报告错误: {error_msg} (prompt_id: {prompt_id})") # 明确ComfyUI端错误
                         raise Exception(f"ComfyUI执行错误: {error_msg}")
                 else:
-                    logger.debug(f"ComfyUI历史响应中未找到prompt_id: {prompt_id}，继续等待...")
+                    logger.info(f"ComfyUI历史响应中未找到prompt_id: {prompt_id}，继续等待...") # 提升日志级别
             
             # 等待一段时间后重试
             await asyncio.sleep(2)

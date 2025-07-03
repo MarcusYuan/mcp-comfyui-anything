@@ -223,6 +223,9 @@ async def execute_workflow(
     """
     try:
         await ctx.info(f"开始执行工作流: {workflow_name}")
+        # 添加更显眼的日志，打印传入的 workflow_patch
+        logger.error(f"DEBUG_WORKFLOW_PATCH: {json.dumps(workflow_patch, indent=2, ensure_ascii=False)}")
+        
         await ctx.debug(f"使用补丁: {workflow_patch}")
         await ctx.report_progress(progress=0, total=100)
         
