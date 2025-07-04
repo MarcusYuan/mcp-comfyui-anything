@@ -2,17 +2,41 @@
 
 ## 🌟 项目概览
 
-ComfyFusion Engine 是一个智能 ComfyUI 工作流执行引擎，旨在解决 ComfyUI 自定义工作流的多样性管理和复杂性问题。它提供标准化的 MCP 接口，能够完美适配并支持各种不同的 ComfyUI 工作流，并通过 MCP 协议与多种编辑器无缝集成，包括：
-- ✅ Cursor 编辑器
-- ✅ VS Code（通过 MCP 扩展）
-- ✅ 任何支持 MCP 协议的 IDE
+ComfyFusion Engine 是针对 ComfyUI 工作流管理难题的智能执行引擎。ComfyUI 作为基于节点的 AI 工作流编辑器，其核心优势在于允许用户通过可视化编程自由组合工作流节点（如 Stable Diffusion 模型、ControlNet 控制模块、图像后处理节点等）。然而这也带来了两个主要挑战：
 
-核心特性包括：
-- **三工具协作架构**：通过 `list_workflows` (工作流枚举), `analyze_and_execute` (智能分析), `execute_workflow` (纯执行) 实现智能工作流处理。
-- **LLM 引导的工具链协作**：工具之间通过 LLM 引导进行协作，符合 MCP 最佳实践。
-- **流式协议支持**：所有工具函数支持异步流式返回，提供实时执行反馈和进度跟踪。
-- **两级融合架构**：用户补丁与模板补丁优先融合，生成统一补丁；统一补丁仅对基础工作流中已存在的节点和字段进行替换，不添加新节点或新字段。
-- **命令行参数覆盖**：支持通过命令行参数灵活配置 ComfyUI 连接、MCP 服务器设置和工作流路径。
+1. **工作流碎片化**：用户常为不同任务创建多个变体工作流（如文生图/图生图/视频生成）
+2. **参数管理复杂**：每个工作流可能有数十个可调参数（提示词、采样步数、ControlNet 权重等）
+
+ComfyFusion Engine 通过创新设计解决这些问题：
+
+### 🧩 通用工作流适配器
+- **即插即用**：用户只需将 ComfyUI 工作流保存为 `.json` 文件并添加轻量级模板（`_tp.json`）
+- **智能参数映射**：自动识别工作流中的可配置节点（如 CLIP 文本编码器、KSampler 等）
+- **模板系统**：通过 `{参数}` 占位符将技术参数转化为用户友好配置项
+
+```mermaid
+graph TD
+    A[用户自定义Workflow] --> B{模板注解}
+    B -->|添加参数占位符| C[标准化工作流]
+    C --> D[MCP Server]
+    D -->|动态参数注入| E[原始ComfyUI执行]
+```
+
+### 💡 核心价值
+1. **降低使用门槛**：
+   - 将复杂节点网络抽象为简单API参数
+   - 用户无需理解底层节点连接逻辑
+   - 保留ComfyUI全部灵活性的同时提供标准化接口
+
+2. **提升协作效率**：
+   - 开发者可封装技术细节，暴露业务相关参数
+   - 支持团队间工作流版本管理和模板共享
+   - 通过MCP协议与各类IDE/编辑器深度集成
+
+3. **生产环境就绪**：
+   - 流式执行状态监控
+   - 自动错误重试机制
+   - 资源用量控制（GPU内存/执行时间）
 
 ## 🌟 核心特性
 
@@ -50,30 +74,6 @@ graph TD
 - **aiofiles** >= 23.0.0 - 异步文件操作
 - **deepmerge** >= 1.1.0 - 深度合并
 - **watchdog** >= 3.0.0 - 文件系统监控
-
-## 📦 安装
-
-### 环境要求
-- Python >= 3.9
-- ComfyUI 正在运行（默认 http://127.0.0.1:8188）
-
-### 通过 PyPI 安装 (推荐使用 uvx)
-
-首先确保您已安装 `uv`。如果未安装，请运行：
-```bash
-pip install uv
-```
-
-然后，使用 `uv` 安装 `comfyfusion-engine`：
-```bash
-uv pip install comfyfusion-engine
-```
-
-**验证安装：**
-安装成功后，您应该可以通过以下命令查看帮助信息：
-```bash
-comfyfusion-mcp --help
-```
 
 ## ⚙️ 配置
 
@@ -126,157 +126,61 @@ comfyfusion-mcp \
   --workflows-path /custom/workflows
 ```
 
-## 🔌 MCP 集成
+## 🚀 启动方式
 
-ComfyFusion Engine 可以轻松集成到任何支持 MCP 协议的客户端中，例如 Cursor 或 VS Code。
+ComfyFusion Engine 支持以下两种启动方式：
 
-### 通用 MCP 客户端配置
+### 方式一：通过 `run_server.py` 和 `config/settings.json` 启动
 
-以下是通用的 MCP 服务器配置模板，您可以根据您的客户端类型进行调整：
+这种方式适用于本地开发和调试，您可以通过修改配置文件来调整服务行为。
 
-**STDIO 协议 (本地直接运行)**：
-适用于在本地直接通过命令行启动服务器的场景。
+1.  **环境准备**：
+    *   确保您已安装 Python 3.9 或更高版本。
+    *   确保 ComfyUI 正在运行（默认地址：`http://127.0.0.1:8188`）。
+    *   安装项目依赖：
+        ```bash
+        pip install -e .
+        ```
 
-```json
-{
-  "name": "comfyfusion-engine",
-  "description": "ComfyUI 智能工作流执行引擎",
-  "protocol": "stdio",
-  "command": "comfyfusion-mcp",
-  "args": [] // 可选：在此处添加命令行参数，例如 ["--comfyui-host", "192.168.1.100"]
-}
-```
+2.  **配置修改**：
+    *   打开 [`config/settings.json`](config/settings.json) 文件。
+    *   根据您的需求修改 `comfyui` 和 `mcp` 部分的配置，例如 ComfyUI 的主机和端口，或 MCP 服务器的监听地址和端口。
 
-**Streaming 协议 (网络服务)**：
-适用于将 ComfyFusion Engine 作为网络服务运行的场景。
+3.  **启动服务器**：
+    *   在项目根目录下运行：
+        ```bash
+        python run_server.py
+        ```
+    *   服务器启动后，您将看到相应的日志输出。
 
-```json
-{
-  "name": "comfyfusion-engine",
-  "description": "ComfyUI 智能工作流执行引擎",
-  "protocol": "streaming",
-  "host": "127.0.0.1", // 服务器实际监听的 IP 地址
-  "port": 8000,       // 服务器实际监听的端口
-  "args": [] // 可选：在此处添加命令行参数
-}
-```
+### 方式二：使用 `uvx` 命令行参数启动
 
-### Cursor 编辑器配置指南
+这种方式适用于快速启动和临时配置覆盖，无需修改配置文件。
 
-1.  **打开 Cursor 设置**：
-    -   使用快捷键 `Ctrl+,` (Windows/Linux) 或 `Cmd+,` (Mac) 打开设置。
-    -   在搜索框中输入 "MCP" 或 "Model Context Protocol"。
+1.  **环境准备**：
+    *   确保您已安装 `uv`。如果未安装，请运行：
+        ```bash
+        pip install uv
+        ```
+    *   确保 ComfyUI 正在运行（默认地址：`http://127.0.0.1:8188`）。
+    *   安装 `comfyfusion-engine`：
+        ```bash
+        uv pip install comfyfusion-engine
+        ```
 
-2.  **编辑 `mcp.servers` 配置**：
-    -   找到 `mcp.servers` 配置项，并点击 "Edit in settings.json" 或 "Add Item"。
-    -   根据您的需求（STDIO 或 Streaming 协议），添加上述通用配置模板。
-
-    **示例 `settings.json` 片段：**
-    ```json
-    {
-      "mcp.servers": [
-        {
-          "name": "comfyfusion-engine",
-          "description": "ComfyUI 智能工作流执行引擎",
-          "protocol": "stdio",
-          "command": "comfyfusion-mcp",
-          "args": []
-        }
-        // ... 其他 MCP 服务器配置
-      ]
-    }
-    ```
-
-### VS Code 配置指南
-
-1.  **安装 MCP 扩展**：
-    -   在 VS Code 扩展市场搜索并安装支持 MCP 协议的扩展（例如 "MCP Client" 或其他兼容扩展）。
-
-2.  **编辑 `settings.json`**：
-    -   打开 VS Code 命令面板 (`Ctrl+Shift+P` 或 `Cmd+Shift+P`)，搜索 "Preferences: Open User Settings (JSON)"。
-    -   在 `settings.json` 文件中，找到或添加 `mcp.servers` 配置项，并根据您的需求添加上述通用配置模板。
-
-    **示例 `settings.json` 片段：**
-    ```json
-    {
-      "mcp.servers": [
-        {
-          "name": "comfyfusion-engine",
-          "description": "ComfyUI 智能工作流执行引擎",
-          "protocol": "stdio",
-          "command": "comfyfusion-mcp",
-          "args": []
-        }
-        // ... 其他 MCP 服务器配置
-      ]
-    }
-    ```
-
-## 🚀 快速开始
-
-### 使用 uvx 启动
-
-```bash
-# 使用默认配置启动
-comfyfusion-mcp
-
-# 使用命令行参数启动
-comfyfusion-mcp \
-  --comfyui-host 192.168.1.100 \
-  --mcp-port 9000 \
-  --workflows-path /custom/workflows
-```
-
-### 调用工具示例
-
-一旦 ComfyFusion Engine 作为 MCP 服务器运行并配置到您的编辑器中，您就可以通过 MCP 客户端调用其工具。
-
-**Python 客户端示例 (适用于 Cursor/VS Code 等内置 Python 环境)：**
-
-```python
-import mcp
-
-# 连接到 comfyfusion-engine 服务器
-# 如果是 STDIO 协议，客户端会自动管理进程
-# 如果是 Streaming 协议，请确保服务器已独立运行
-client = mcp.Client(server_name="comfyfusion-engine")
-
-# 列出所有可用的工作流
-print("正在列出可用工作流...")
-workflows_result = await client.call_tool("list_workflows")
-print(f"可用工作流: {workflows_result.get('workflows')}")
-
-# 智能分析并执行工作流
-# 这是一个流式调用，会实时返回进度和结果
-print("\n正在智能分析并执行工作流...")
-async for update in client.call_tool_stream("analyze_and_execute", {
-    "user_request": "生成一张可爱的橘猫图片，动漫风格，尺寸为 1024x1024",
-    "workflow_name": "fluximage" # 假设您有一个名为 'fluximage' 的工作流
-}):
-    if update.get("status") == "analysis_ready":
-        print(f"分析完成，LLM 引导信息: {update.get('guidance')}")
-        # 在实际的 LLM 客户端中，LLM 会根据 guidance 自动调用 execute_workflow
-    elif update.get("status") == "success":
-        print(f"工作流执行成功！输出文件: {update.get('output_files')}")
-        print(f"ComfyUI URL: {update.get('comfyui_urls')}")
-    elif update.get("status") == "error":
-        print(f"执行错误: {update.get('error')}")
-    else:
-        print(f"进度更新: {update}")
-
-# 直接执行工作流 (如果已知所有参数)
-print("\n正在直接执行工作流...")
-execute_result = await client.call_tool("execute_workflow", {
-    "workflow_name": "fluximage",
-    "workflow_patch": {
-        "prompt": "a cute orange cat, anime style, high quality",
-        "width": 1024,
-        "height": 1024,
-        "seed": 42 # 示例参数
-    }
-})
-print(f"直接执行结果: {execute_result.get('comfyui_urls')}")
-```
+2.  **启动服务器**：
+    *   使用默认配置启动：
+        ```bash
+        comfyfusion-mcp
+        ```
+    *   使用命令行参数覆盖配置启动（例如，更改 ComfyUI 主机、MCP 端口和工作流路径）：
+        ```bash
+        comfyfusion-mcp \
+          --comfyui-host 192.168.1.100 \
+          --mcp-port 9000 \
+          --workflows-path /custom/workflows
+        ```
+    *   您可以通过 `comfyfusion-mcp --help` 查看所有可用的命令行参数。
 
 ## 📁 项目结构
 ```
@@ -311,36 +215,64 @@ mcp-comfyui-anything/
 
 ## 🔧 工作流管理
 
-### 文件命名规范
-- 基础工作流：`{工作流名称}.json`
-- 模板文件：`{工作流名称}_tp.json`
+### 添加新工作流完整流程
 
-### 模板设计最佳实践
+1. **从 ComfyUI 导出完整工作流**：
+   ```bash
+   # 在 ComfyUI 界面操作
+   1. 加载或创建您的工作流
+   2. 点击右上角 "Save" 按钮
+   3. 保存为 JSON 文件到 workflows/ 目录
+   示例文件名: fluximage.json
+   ```
 
-1. **使用 `_meta` 字段**描述工作流信息
-2. **参数化占位符**使用 `{参数名}` 格式
-3. **合理分组**相关参数到同一节点
-4. **提供默认值**确保基础工作流可独立运行
+2. **创建最小参数模板**：
+   新建 `{工作流名称}_tp.json` 文件（如 `fluximage_tp.json`），只需包含需要暴露的参数：
+   ```json
+   {
+     "description": "Flux 图像生成 - 支持自定义提示词",
+     "nodes": {
+       "6": {
+         "inputs": {
+           "text": "{prompt}"
+         }
+       },
+       "31": {
+         "inputs": {
+           "seed": "{seed}"
+         }
+       }
+     }
+   }
+   ```
+   █ 原则说明：
+   - 仅保留核心用户参数（通常 2-5 个）
+   - 保持 JSON 结构扁平化
+   - 使用英文小写参数名（prompt/seed）
 
-### 示例模板结构
-```json
-{
-  "_meta": {
-    "description": "工作流描述",
-    "category": "分类",
-    "tags": ["标签1", "标签2"],
-    "version": "1.0",
-    "author": "作者",
-    "created_at": "2024-01-01",
-    "updated_at": "2024-01-01"
-  },
-  "节点ID": {
-    "inputs": {
-      "参数名": "{占位符}"
-    }
-  }
-}
-```
+3. **文件存放规范**：
+   ```bash
+   workflows/
+   ├── your_workflow.json    # 原始工作流
+   └── your_workflow_tp.json # 参数模板
+   ```
+
+4. **重启服务生效**：
+   ```bash
+   # 如果使用 run_server.py
+   pkill -f run_server.py && python run_server.py
+
+   # 如果使用 uvx 启动
+   comfyfusion-mcp --workflows-path ./workflows
+   ```
+
+### 技术细节说明
+1. 模板文件会自动与基础工作流匹配（通过文件名前缀）
+2. 新增/修改模板文件后需要重启服务
+3. 参数替换仅修改现有节点字段，不会新增节点
+- **prompt**：控制图像生成的核心描述
+- **seed**：控制生成结果的随机性
+- 其他技术参数（采样器配置、模型选择等）保持默认
 
 ## 🌊 流式特性
 

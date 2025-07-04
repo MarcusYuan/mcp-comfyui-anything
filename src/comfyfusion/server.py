@@ -235,27 +235,65 @@ async def execute_workflow(
             raise McpError(f"未找到基础工作流: {workflow_name}")
         
         await ctx.debug("基础工作流加载完成")
-        logger.debug(f"基础工作流节点数: {len(base_workflow)}")  # 新增节点数日志
+        logger.debug(f"基础工作流节点数: {len(base_workflow)}")
         await ctx.report_progress(progress=20, total=100)
         
-        # 2. 加载模板补丁
-        await ctx.info("加载模板补丁...")
+        # 2. 加载模板补丁和模板信息
+        await ctx.info("加载模板补丁和模板信息...")
         template_patch = await workflow_discovery.load_template(workflow_name)
+        template_info = await workflow_discovery.get_template_info(workflow_name)
         
-        await ctx.debug("模板补丁加载完成")
-        logger.debug(f"模板补丁节点数: {len(template_patch)}")  # 新增节点数日志
+        await ctx.debug("模板补丁和模板信息加载完成")
+        logger.debug(f"模板补丁节点数: {len(template_patch)}")
         await ctx.report_progress(progress=30, total=100)
         
+        # 转换 workflow_patch 格式
+        converted_user_patch = {}
+        # 遍历 template_info 中的 parameters，建立参数名到节点路径的映射
+        # 例如: {"prompt": "模板参数: nodes.6.inputs.text"}
+        for param_name, node_path_info in template_info.get("parameters", {}).items():
+            # 提取实际的节点路径，例如 "nodes.6.inputs.text"
+            # 假设格式总是 "模板参数: " + 实际路径
+            if node_path_info.startswith("模板参数: "):
+                actual_node_path = node_path_info.replace("模板参数: ", "")
+                # 从传入的 workflow_patch 中获取对应的值
+                if actual_node_path in workflow_patch:
+                    converted_user_patch[param_name] = workflow_patch[actual_node_path]
+                    logger.debug(f"转换补丁: {actual_node_path} -> {param_name} = {workflow_patch[actual_node_path]}")
+                else:
+                    logger.warning(f"传入的 workflow_patch 中缺少参数: {actual_node_path}，无法转换为 {param_name}")
+            else:
+                logger.warning(f"模板参数格式异常: {node_path_info}")
+
+        # 如果转换后的补丁为空，但原始补丁不为空，则尝试直接使用原始补丁（可能是参数化格式）
+        if not converted_user_patch and workflow_patch:
+            # 检查 workflow_patch 是否已经是参数化格式 (例如 {"prompt": "..."})
+            # 简单检查：如果键不是以 "nodes." 开头，则认为是参数化格式
+            is_parameterized_format = all(not k.startswith("nodes.") for k in workflow_patch.keys())
+            if is_parameterized_format:
+                converted_user_patch = workflow_patch
+                logger.debug("workflow_patch 已经是参数化格式，直接使用。")
+            else:
+                logger.warning("无法识别 workflow_patch 格式，尝试直接传递。")
+                # 这种情况下，converted_user_patch 应该保持为空，让 fusion_engine 内部处理
+                # 或者，如果确定 LLM 总是会提供点分隔路径，这里可以不进行回退
+                # 为了调试，我们暂时让它保持原样，以便在 fusion_engine 中看到原始的 workflow_patch
+                converted_user_patch = workflow_patch
+
+        logger.debug(f"转换后的用户补丁 (converted_user_patch): {converted_user_patch}")
+        # 再次打印传入 fusion_engine 的 user_patch，确保其内容正确
+        logger.debug(f"传递给 fusion_engine 的 user_patch: {json.dumps(converted_user_patch, indent=2, ensure_ascii=False)}")
+
         # 3. 执行两级融合
         await ctx.info("执行两级工作流融合...")
-        start_fusion = time.time()  # 新增融合开始时间
+        start_fusion = time.time()
         final_workflow = await fusion_engine.fusion_workflow(
             base_workflow=base_workflow,
             template_patch=template_patch,
-            user_patch=workflow_patch
+            user_patch=converted_user_patch # 使用转换后的补丁
         )
-        fusion_time = time.time() - start_fusion  # 新增融合耗时
-        logger.debug(f"工作流融合耗时: {fusion_time:.2f}秒")  # 新增耗时日志
+        fusion_time = time.time() - start_fusion
+        logger.debug(f"工作流融合耗时: {fusion_time:.2f}秒")
         
         await ctx.debug("工作流融合完成")
         await ctx.info("工作流融合完成")
@@ -269,17 +307,6 @@ async def execute_workflow(
             return {"status": "error", "error": error_msg}
         
         await ctx.debug("工作流验证完成")
-        
-        # 详细调试输出融合后的工作流结构
-        # 检查每个顶级键
-        for key, value in final_workflow.items():
-            if isinstance(value, dict):
-                if 'class_type' in value:
-                    pass
-                else:
-                    pass
-            else:
-                pass
         
         # 查找所有无效节点（缺少class_type的节点）
         invalid_nodes = []
@@ -296,14 +323,14 @@ async def execute_workflow(
                 del final_workflow[invalid_node]
         
         await ctx.report_progress(progress=50, total=100)
-        logger.debug(f"移除无效节点后剩余节点数: {len(final_workflow)}")  # 新增节点数日志
+        logger.debug(f"移除无效节点后剩余节点数: {len(final_workflow)}")
         
         # 4. 调用ComfyUI API执行
         await ctx.info("提交到ComfyUI执行...")
-        start_execution = time.time()  # 新增执行开始时间
+        start_execution = time.time()
         execution_result = await comfyui_client.execute_workflow(final_workflow)
-        execution_time = time.time() - start_execution  # 新增执行耗时
-        logger.debug(f"ComfyUI执行耗时: {execution_time:.2f}秒")  # 新增耗时日志
+        execution_time = time.time() - start_execution
+        logger.debug(f"ComfyUI执行耗时: {execution_time:.2f}秒")
         
         await ctx.debug("ComfyUI执行完成")
         await ctx.report_progress(progress=90, total=100)
@@ -323,18 +350,18 @@ async def execute_workflow(
         await ctx.report_progress(progress=100, total=100)
         await ctx.debug("工作流执行结果处理完成")
         await ctx.info(f"工作流执行完成，生成 {len(result['output_files'])} 个文件")
-        logger.debug(f"输出文件详情: {json.dumps(result['output_files'], indent=2)}")  # 新增文件详情日志
+        logger.debug(f"输出文件详情: {json.dumps(result['output_files'], indent=2)}")
         
         return result
         
     except Exception as e:
-        error_type = type(e).__name__  # 获取异常类型
+        error_type = type(e).__name__
         await ctx.debug(f"execute_workflow异常 [{error_type}]: {str(e)}")
         await ctx.error(f"执行工作流时发生错误 [{error_type}]: {e}")
-        logger.exception("工作流执行失败详情")  # 新增详细异常日志
+        logger.exception("工作流执行失败详情")
         return {
             "status": "error",
-            "error_type": error_type,  # 新增异常类型
+            "error_type": error_type,
             "error": str(e),
             "workflow_name": workflow_name,
             "workflow_patch": workflow_patch

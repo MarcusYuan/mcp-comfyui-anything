@@ -61,6 +61,36 @@ class WorkflowFusionEngine:
         logger.info(f"融合后工作流中节点31的seed值: {seed_value}")
         return final_workflow
     
+    def _convert_dot_paths_to_nested(self, patch: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        将点分隔路径格式的补丁转换为嵌套字典结构
+        示例:
+            {"nodes.6.inputs.text": "value"}
+            =>
+            {"nodes": {"6": {"inputs": {"text": "value"}}}}
+        """
+        nested_patch = {"nodes": {}}
+        for path, value in patch.items():
+            if not path.startswith("nodes."):
+                continue
+                
+            parts = path.split('.')
+            if len(parts) < 4:
+                logger.warning(f"无效的补丁路径格式: {path}")
+                continue
+                
+            # 提取节点ID和字段名 (nodes.6.inputs.text -> node_id=6, field=text)
+            node_id = parts[1]
+            field_name = parts[3]
+            
+            # 构建嵌套结构
+            if node_id not in nested_patch["nodes"]:
+                nested_patch["nodes"][node_id] = {"inputs": {}}
+                
+            nested_patch["nodes"][node_id]["inputs"][field_name] = value
+        
+        return nested_patch
+
     def _apply_unified_patch(
         self,
         workflow: Dict[str, Any],
@@ -68,9 +98,20 @@ class WorkflowFusionEngine:
     ) -> Dict[str, Any]:
         """
         将统一补丁（无占位符）应用到工作流。
-        仅更新工作流中已存在的节点的输入字段（不添加新节点或新字段）。
+        支持两种补丁格式:
+          1. 嵌套结构: {"nodes": {"6": {"inputs": {"text": "value"}}}}
+          2. 点分隔路径: {"nodes.6.inputs.text": "value"}
         """
         final_workflow = copy.deepcopy(workflow)
+        
+        # 转换点分隔路径为嵌套结构
+        if any(key.startswith("nodes.") for key in unified_patch):
+            logger.debug(f"检测到点分隔路径补丁格式: {list(unified_patch.keys())}")
+            converted_patch = self._convert_dot_paths_to_nested(unified_patch)
+            logger.debug(f"转换后的嵌套补丁结构: {converted_patch}")
+            # 合并转换后的补丁
+            unified_patch = always_merger.merge(unified_patch, converted_patch)
+            logger.debug(f"合并后的最终补丁结构: {unified_patch}")
         
         # 提取节点补丁配置
         node_patches = unified_patch.get("nodes", {})
@@ -89,8 +130,10 @@ class WorkflowFusionEngine:
                 continue
                 
             # 仅更新基础节点中已存在的输入字段
+            logger.debug(f"应用补丁到节点 {node_id}: 输入字段 {list(patch_inputs.keys())}")
             for key, value in patch_inputs.items():
                 if key in base_node["inputs"]:
+                    logger.debug(f"更新节点 {node_id}.{key} = {value}")
                     base_node["inputs"][key] = value
                 else:
                     logger.warning(f"节点 {node_id} 的输入字段 {key} 不存在于基础工作流，已跳过。")
