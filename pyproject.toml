@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "comfyfusion-engine"
-version = "1.0.0"
+version = "1.0.1"
 description = "ComfyFusion Engine - 智能化 ComfyUI 工作流执行引擎"
 authors = [
     {name = "ComfyFusion Team", email = "team@comfyfusion.com"},
