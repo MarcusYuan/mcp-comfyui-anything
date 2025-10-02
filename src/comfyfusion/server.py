@@ -28,10 +28,7 @@ logger = get_logger(__name__)
 
 # 全局配置和组件
 config = load_config()
-mcp = FastMCP(
-    name=config.mcp.server_name,
-    description=config.mcp.description
-)
+mcp = FastMCP(config.mcp.server_name)
 
 # 初始化核心组件
 workflow_discovery = WorkflowDiscovery(config.paths.workflows)

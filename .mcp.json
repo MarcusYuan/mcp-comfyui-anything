@@ -1,0 +1,96 @@
+{
+  "mcpServers": {
+    "deepwiki": {
+      "type": "sse",
+      "url": "https://mcp.deepwiki.com/sse",
+      "disabled": false,
+      "alwaysAllow": []
+    },
+    "context7": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp"
+      ],
+      "env": {
+        "DEFAULT_MINIMUM_TOKENS": ""
+      },
+      "alwaysAllow": [
+        "resolve-library-id",
+        "get-library-docs"
+      ],
+      "disabled": false,
+      "timeout": 300
+    },
+    "browser-tools-mcp": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@agentdeskai/browser-tools-mcp@1.2.0"
+      ],
+      "env": {
+        "BROWSER_TOOLS_HOST": "127.0.0.1",
+        "BROWSER_TOOLS_PORT": "3025"
+      },
+      "alwaysAllow": [
+        "getConsoleErrors",
+        "getConsoleLogs",
+        "getNetworkLogs",
+        "getNetworkErrors",
+        "wipeLogs",
+        "takeScreenshot",
+        "getSelectedElement",
+        "runAccessibilityAudit",
+        "runPerformanceAudit",
+        "runSEOAudit",
+        "runBestPracticesAudit",
+        "runAuditMode",
+        "runDebuggerMode",
+        "runNextJSAudit",
+        "getNetworkErrors</tool好的，感谢您提供的日志。您是对的，我不应该只关注代码本身，而应该结合应用的实际运行情况来思考。\n\n这些日志显示了您导航到编辑器页面的完整流程：`http://192.168.3.3:5173/projects/3e0b7963-c26e-48fc-9659-23c64ed4e110/editor`。这提醒我，问题不仅仅是“UI不刷新”，还有一个更深层次的问题：**数据持久化**。\n\n我的上一个分析指出了UI不刷新的直接原因（可变状态更新），但忽略了即使用户刷新页面，这些删除操作也无法保存。`editorStore.ts` 中的 `syncChangesToBackend` 函数目前还是一个 `TODO`。\n\n因此，一个完整的修复方案需要解决两个问题：\n1.  **即时UI更新**：通过在 `batchEditWords` 中使用不可变的方式更新状态来解决。\n2.  **数据持久化**：实现将变更保存到后端的逻辑。\n\n在实施修复之前，我需要先了解现有的API接口，以便正确地实现数据持久化。我将首先查看 `frontend/src/api/` 目录下的文件，以了解可用的API钩子（hooks）。\n\n<list_files>\n<path>frontend/src/api/</path>",
+        "getNetworkErrors</tool好的，感谢您提供的日志。您是对的，我不应该只关注代码本身，而应该结合应用的实际运行情况来思考。\n\n这些日志显示了您导航到编辑器页面的完整流程：`http://192.168.3.3:5173/projects/3e0b7963-c26e-48fc-9659-23c64ed4e110/editor`。这提醒我，问题不仅仅是“UI不刷新”，还有一个更深层次的问题：**数据持久化**。\n\n我的上一个分析指出了UI不刷新的直接原因（可变状态更新），但忽略了即使用户刷新页面，这些删除操作也无法保存。`editorStore.ts` 中的 `syncChangesToBackend` 函数目前还是一个 `TODO`。\n\n因此，一个完整的修复方案需要解决两个问题：\n1.  **即时UI更新**：通过在 `batchEditWords` 中使用不可变的方式更新状态来解决。\n2.  **数据持久化**：实现将变更保存到后端的逻辑。\n\n在实施修复之前，我需要先了解现有的API接口，以便正确地实现数据持久化。我将首先查看 `frontend/src/api/` 目录下的文件，以了解可用的API钩子（hooks）。\n\n<list_files>\n<path>frontend/src/api/</path>\n</list_files>"
+      ]
+    },
+    "brave-search": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-brave-search"
+      ],
+      "env": {
+        "BRAVE_API_KEY": "BSApcsY5FgSTKsN6WovlA3o4mfX0Ieq"
+      },
+      "alwaysAllow": [
+        "brave_web_search"
+      ],
+      "disabled": false
+    },
+    "exa": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@smithery/cli@latest",
+        "run",
+        "exa",
+        "--key",
+        "a05e33dd-c76e-42ae-a9c1-31b1c1a2b74c"
+      ]
+    },
+    "remotion-documentation": {
+      "command": "npx",
+      "args": [
+        "@remotion/mcp@latest"
+      ],
+      "disabled": false,
+      "alwaysAllow": []
+    },
+    "spec-workflow": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@pimzino/spec-workflow-mcp@latest",
+        "--AutoStartDashboard"
+      ]
+    }
+  }
+}

@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  comfyfusion-engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: comfyfusion-engine
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./workflows:/app/workflows
+      - ./config/settings.json:/app/config/settings.json
+    # 如果您希望容器内的服务能够访问到宿主机网络上的 ComfyUI (例如 192.168.3.3)
+    # 对于 macOS 和 Windows，通常可以直接工作。
+    # 对于 Linux，您可能需要添加以下配置：
+    # extra_hosts:
+    #   - "host.docker.internal:host-gateway"
+    # 然后确保 settings.json 中的 comfyui.host 设置为 host.docker.internal
+    networks:
+      - default
